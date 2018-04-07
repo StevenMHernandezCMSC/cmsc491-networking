@@ -108,5 +108,3 @@ if __name__ == "__main__":
 
     client = HTTPClient()
     client.get(args[1])
-
-    print("\n\n\n\n")
