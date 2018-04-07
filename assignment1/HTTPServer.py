@@ -67,18 +67,18 @@ class HTTPServer:
         exit("ERR - unknown method")
 
     def build_response(self, response_code, response_message, response_body):
-            return "\r\n".join([
-                "HTTP/1.0 {} {}".format(response_code, response_message),
-                "Server: CMSC491Server.v.1.0",
-                "Content-Length: {}".format(len(response_body)),
-                "Connection: close",
-                "Content-Type: text/html;charset=utf-8",
-                "",
-                response_body,
-            ])
+        return "\r\n".join([
+            "HTTP/1.0 {} {}".format(response_code, response_message),
+            "Server: CMSC491Server.v.1.0",
+            "Content-Length: {}".format(len(response_body)),
+            "Connection: close",
+            "Content-Type: text/html;charset=utf-8",
+            "",
+            response_body,
+        ])
 
     def GET(self, client_sentence):
-        file_path = self.get_file_path_from_client_sentence(client_sentence)
+        file_path = self.get_file_path_from_client_sentence(client_sentence, "GET")
 
         # Return 404 if the file does not exist currently
         if not os.path.isfile(file_path):
@@ -91,8 +91,8 @@ class HTTPServer:
 
     def PUT(self, client_sentence):
         try:
-            file_path = self.get_file_path_from_client_sentence(client_sentence)
-            uploaded_file_content = client_sentence.split("\r\n", 1)[1]
+            file_path = self.get_file_path_from_client_sentence(client_sentence, "PUT")
+            uploaded_file_content = client_sentence.split("\r\n\r\n", 1)[1]
 
             file = open(file_path, "w+")
             file.write(uploaded_file_content)
@@ -102,8 +102,9 @@ class HTTPServer:
         except:
             return self.build_response(606, "FAILED File NOT Created", "File NOT Created")
 
-    def get_file_path_from_client_sentence(self, client_sentence):
-        m = re.search(r'GET (.*) HTTP', client_sentence)
+    def get_file_path_from_client_sentence(self, client_sentence, method):
+        regex = r'GET (.*) HTTP' if method == "GET" else r'PUT (.*) HTTP'
+        m = re.search(regex, client_sentence)
         path = m.group(1)
 
         # on a normal server, path `/` would indicate an `index.html` file.

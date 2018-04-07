@@ -1,3 +1,4 @@
+import os
 import sys
 from socket import *
 
@@ -5,12 +6,29 @@ import re
 
 
 class HTTPClient:
-    def get(self, url):
+    def GET(self, url):
         if not self.__validate_url(url):
             exit("ERR - arg 1")
         self.__parse_url(url)
-        request_string = self.__build_request_string()
-        print(request_string)
+        request_string = self.__build_request_header("GET")
+
+        print(request_string)  # required print statement
+        response_string = self.__send_request(request_string)
+        parsed_data = self.__parse_response_header(response_string)
+        self.print_parsed_data(parsed_data)
+        if 200 <= parsed_data['response_code'] < 300:
+            self.store_body(parsed_data['body'])
+
+    def PUT(self, url, file_path):
+        if not self.__validate_url(url):
+            exit("ERR - arg 2")
+        if not os.path.isfile(file_path):
+            exit("ERR - arg 3")
+        file_content = "\r\n".join(open(file_path).readlines())
+        self.__parse_url(url)
+        request_string = self.__build_request_header("PUT") + file_content + "\r\n\r\n"
+
+        print(request_string)  # required print statement
         response_string = self.__send_request(request_string)
         parsed_data = self.__parse_response_header(response_string)
         self.print_parsed_data(parsed_data)
@@ -33,21 +51,24 @@ class HTTPClient:
         self.port = int(m.group(3)) if m.group(3) else 80  # defaults to http port 80
         self.path = m.group(4) if m.group(4) else "/"  # defaults to base path
 
-    def __build_request_string(self):
-        return "GET {path} HTTP/1.0\r\nHost: {hostname}\r\nUser-Agent: VCU-CMSC4491\r\n\r\n" \
-            .format(path=self.path, hostname=self.hostname)
+    def __build_request_header(self, method):
+        return "{method} {path} HTTP/1.0\r\nHost: {hostname}\r\nUser-Agent: VCU-CMSC491\r\n\r\n" \
+            .format(method=method, path=self.path, hostname=self.hostname)
 
     def __send_request(self, request_string):
-        client_socket = socket(AF_INET, SOCK_STREAM)
-        client_socket.connect((self.hostname, self.port))
-        client_socket.send(request_string)
-        server_sentence = client_socket.recv(1000000)
-        client_socket.close()
-        return server_sentence
+        try:
+            client_socket = socket(AF_INET, SOCK_STREAM)
+            client_socket.connect((self.hostname, self.port))
+            client_socket.send(request_string)
+            server_sentence = client_socket.recv(1000000)
+            client_socket.close()
+            return server_sentence
+        except:
+            exit("ERR - Connection refused")
 
     def __parse_response_header(self, response_string):
         header, body = response_string.split("\r\n\r\n", 1)
-        m = re.search(r'HTTP/1\.[0-9] ([0-9]+)', header)
+        m = re.search(r'HTTP\/1\.[0-9] ([0-9]+)', header)
         response_code = int(m.group(1))
         m = re.search('Server: (.*?)\r\n', header)
         server = m.group(1)
@@ -79,6 +100,15 @@ class HTTPClient:
                 "body": body,
             }
 
+        # Default not specified in project definition
+        # This is useful if we receive a 606 for our "PUT" requests
+        return {
+            "response_code": response_code,
+            "server": server,
+            "header": header,
+            "body": body,
+        }
+
     def print_parsed_data(self, parsed_data):
         print("Response Code: {}".format(parsed_data['response_code']))
         print("Server: {}".format(parsed_data['server']))
@@ -107,4 +137,21 @@ if __name__ == "__main__":
     args = sys.argv
 
     client = HTTPClient()
-    client.get(args[1])
+
+    # If there are 2 arguments, we assume that the use is issuing a "GET" request
+    if len(args) == 2:
+        print(client.GET(args[1]))
+        exit(0)
+
+    # If there are 3 arguments, then the user is issuing something other than "GET"
+    # We must also ensure that the middle parameter is "PUT", because this is the
+    # only other method allowed from our client.
+    if len(args) == 4 and args[1] == "PUT":
+        print(client.PUT(args[2], args[3]))
+        exit(0)
+
+    print("ERR - arguments supplied do not match expected signature.")
+    print("Try:")
+    print("python HTTPClient.py {url}")
+    print("python HTTPClient.py PUT {url} {local-file-path}")
+    exit(255)
